@@ -11,68 +11,6 @@ from dynamic_models.raw_vgg import vgg11 as raw_vgg11
 from dynamic_models.dy_resnet import resnet18 as dy_resnet18
 from torchvision.models.resnet import resnet18 as raw_resnet18
 
-parser = argparse.ArgumentParser(description='dynamic convolution')
-parser.add_argument('--dataset', type=str, default='cifar10', help='training dataset')
-parser.add_argument('--batch-size', type=int, default=128)
-parser.add_argument('--test-batch-size', type=int, default=20)
-parser.add_argument('--epochs', type=int, default=160)
-parser.add_argument('--lr', type=float, default=0.1, )
-parser.add_argument('--momentum', type=float, default=0.9)
-parser.add_argument('--weight-decay', type=float, default=1e-4)
-parser.add_argument('--net-name', default='vgg16_bn')
-
-args = parser.parse_args()
-args.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-
-
-if args.dataset == 'cifar10':
-    numclasses=10
-    trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True,
-                                            transform=transforms.Compose([
-                                                transforms.Pad(4),
-                                                transforms.RandomCrop(32),
-                                                transforms.RandomHorizontalFlip(),
-                                                transforms.ToTensor(),
-                                                transforms.Normalize((0.4914, 0.4822, 0.4465),(0.2023, 0.1994, 0.2010))
-                                            ]))
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=0)
-
-    testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True,
-                                           transform=transforms.Compose([
-                                               transforms.ToTensor(),
-                                               transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
-                                           ]))
-    testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=0)
-elif args.dataset=='cifar100':
-    numclasses=100
-    trainset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True,
-                                            transform=transforms.Compose([
-                                                transforms.Pad(4),
-                                                transforms.RandomCrop(32),
-                                                transforms.RandomHorizontalFlip(),
-                                                transforms.ToTensor(),
-                                                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
-                                            ]))
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=0)
-
-    testset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True,
-                                           transform=transforms.Compose([
-                                               transforms.ToTensor(),
-                                               transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
-                                           ]))
-    testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=0)
-
-if args.net_name=='dy_resnet18':
-    model = dy_resnet18(num_classes=numclasses)
-elif args.net_name=='raw_resnet18':
-    model = raw_resnet18(num_classes=numclasses)
-elif args.net_name=='raw_vgg11':
-    model = raw_vgg11(num_classes=numclasses)
-elif args.net_name=='dy_vgg11':
-    model = dy_vgg11(num_classes=numclasses)
-model.to(args.device)
-optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-print(str(args))
 
 def adjust_lr(optimizer, epoch):
     if epoch in [args.epochs*0.5, args.epochs*0.75, args.epochs*0.85]:
@@ -82,7 +20,7 @@ def adjust_lr(optimizer, epoch):
         print('Change lr:'+str(lr))
 
 
-def train(epoch):
+def train(model, optimizer, trainloader, epoch):
     model.train()
     avg_loss = 0.
     train_acc = 0.
@@ -104,7 +42,7 @@ def train(epoch):
         model.update_temperature()
 
 
-def val(epoch):
+def val(model, testloader, epoch):
     model.eval()
     test_loss = 0.
     correct=0.
@@ -121,10 +59,89 @@ def val(epoch):
     return correct/len(testloader.dataset)
 
 
-best_val_acc=0.
-for i in range(args.epochs):
-    train(i+1)
-    temp_acc = val(i+1)
-    if temp_acc>best_val_acc:
-        best_val_acc = temp_acc
-print('Best acc{}'.format(best_val_acc))
+def main(args):
+    if args.dataset == 'cifar10':
+        numclasses = 10
+        trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True,
+                                                transform=transforms.Compose([
+                                                    transforms.Pad(4),
+                                                    transforms.RandomCrop(32),
+                                                    transforms.RandomHorizontalFlip(),
+                                                    transforms.ToTensor(),
+                                                    transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                                                         (0.2023, 0.1994, 0.2010))
+                                                ]))
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=0)
+
+        testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True,
+                                               transform=transforms.Compose([
+                                                   transforms.ToTensor(),
+                                                   transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                                                        (0.2023, 0.1994, 0.2010))
+                                               ]))
+        testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=0)
+    elif args.dataset == 'cifar100':
+        numclasses = 100
+        trainset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True,
+                                                 transform=transforms.Compose([
+                                                     transforms.Pad(4),
+                                                     transforms.RandomCrop(32),
+                                                     transforms.RandomHorizontalFlip(),
+                                                     transforms.ToTensor(),
+                                                     transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                                                          (0.2023, 0.1994, 0.2010))
+                                                 ]))
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=0)
+
+        testset = torchvision.datasets.CIFAR100(root='./data', train=False, download=True,
+                                                transform=transforms.Compose([
+                                                    transforms.ToTensor(),
+                                                    transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                                                         (0.2023, 0.1994, 0.2010))
+                                                ]))
+        testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=0)
+
+    if args.net_name == 'dy_resnet18':
+        model = dy_resnet18(num_classes=numclasses)
+    elif args.net_name == 'raw_resnet18':
+        model = raw_resnet18(num_classes=numclasses)
+    elif args.net_name == 'raw_vgg11':
+        model = raw_vgg11(num_classes=numclasses)
+    elif args.net_name == 'dy_vgg11':
+        model = dy_vgg11(num_classes=numclasses)
+    model.to(args.device)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    print(str(args))
+
+    best_val_acc = 0.
+    for i in range(args.epochs):
+        train(model, optimizer, trainloader, i + 1)
+        temp_acc = val(model, testloader, i + 1)
+        if temp_acc > best_val_acc:
+            best_val_acc = temp_acc
+        print("Epoch {:03d} | Test Acc {:.4f}% ".format(i + 1, temp_acc))
+    print('Best acc{}'.format(best_val_acc))
+
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='dynamic convolution')
+    parser.add_argument('--dataset', type=str, default='cifar10', help='training dataset')
+    parser.add_argument('--batch-size', type=int, default=128)
+    parser.add_argument('--test-batch-size', type=int, default=20)
+    parser.add_argument('--epochs', type=int, default=160)
+    parser.add_argument('--lr', type=float, default=0.1, )
+    parser.add_argument('--momentum', type=float, default=0.9)
+    parser.add_argument('--weight-decay', type=float, default=1e-4)
+    parser.add_argument('--net-name', default='vgg16_bn')
+
+    args = parser.parse_args()
+    args.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+
+    print(args)
+    main(args)
+    print("Finish!")
+
+
+
+
