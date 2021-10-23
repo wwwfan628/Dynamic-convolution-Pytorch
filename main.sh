@@ -6,7 +6,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=8G
-#SBATCH --nodelist=tikgpu05
+#SBATCH --nodelist=tikgpu03
 
 /bin/echo Running on host: `hostname`
 /bin/echo In directory: `pwd`
