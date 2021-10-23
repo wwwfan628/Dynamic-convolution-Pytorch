@@ -133,7 +133,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.1, )
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=1e-4)
-    parser.add_argument('--net-name', default='vgg16_bn')
+    parser.add_argument('--net-name', default='dy_vgg11')
 
     args = parser.parse_args()
     args.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
