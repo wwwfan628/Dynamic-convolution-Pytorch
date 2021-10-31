@@ -6,7 +6,9 @@ import time
 import argparse
 import torchvision.models.vgg
 import torchvision.transforms as transforms
-from dynamic_models.dy_vgg import vgg11 as dy_vgg11
+from dynamic_models.dy_vgg import vgg11_bn as dy_vgg11
+from dynamic_models.dy_vgg_small import dy_vgg_small as dy_vgg_small
+from dynamic_models.dy_lenet5 import dy_lenet5
 from dynamic_models.raw_vgg import vgg11 as raw_vgg11
 from dynamic_models.dy_resnet import resnet18 as dy_resnet18
 from torchvision.models.resnet import resnet18 as raw_resnet18
@@ -21,6 +23,7 @@ def adjust_lr(optimizer, epoch):
 
 
 def train(model, optimizer, trainloader, epoch):
+    loss_func = nn.CrossEntropyLoss()
     model.train()
     avg_loss = 0.
     train_acc = 0.
@@ -30,7 +33,7 @@ def train(model, optimizer, trainloader, epoch):
         data, target = data.to(args.device), target.to(args.device)
         optimizer.zero_grad()
         output = model(data)
-        loss = F.cross_entropy(output, target)
+        loss = loss_func(output, target)
         avg_loss += loss.item()
         pred = output.data.max(1, keepdim=True)[1]
         train_acc += pred.eq(target.data.view_as(pred)).cpu().sum()
@@ -43,6 +46,7 @@ def train(model, optimizer, trainloader, epoch):
 
 
 def val(model, testloader, epoch):
+    loss_func = nn.CrossEntropyLoss()
     model.eval()
     test_loss = 0.
     correct=0.
@@ -50,8 +54,8 @@ def val(model, testloader, epoch):
         for data, label in testloader:
             data, label = data.to(args.device), label.to(args.device)
             output = model(data)
-            test_loss += F.cross_entropy(output, label, size_average=False).item()
-            pred =  output.data.max(1, keepdim=True)[1]
+            test_loss += loss_func(output, label).item()
+            pred = output.data.max(1, keepdim=True)[1]
             correct += pred.eq(label.data.view_as(pred)).cpu().sum()
     test_loss/=len(testloader.dataset)
     correct = int(correct)
@@ -60,7 +64,15 @@ def val(model, testloader, epoch):
 
 
 def main(args):
-    if args.dataset == 'cifar10':
+    if args.dataset == 'mnist':
+        numclasses = 10
+        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+
+        trainset = torchvision.datasets.MNIST(root='../datasets', train=True, download=True, transform=transform)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=0)
+        testset = torchvision.datasets.MNIST(root='../datasets', train=False, download=True, transform=transform)
+        testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=0)
+    elif args.dataset == 'cifar10':
         numclasses = 10
         trainset = torchvision.datasets.CIFAR10(root='./data', train=True, download=True,
                                                 transform=transforms.Compose([
@@ -101,7 +113,9 @@ def main(args):
                                                 ]))
         testloader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
-    if args.net_name == 'dy_resnet18':
+    if args.net_name == 'dy_lenet5':
+        model = dy_lenet5(numclasses=numclasses)
+    elif args.net_name == 'dy_resnet18':
         model = dy_resnet18(num_classes=numclasses)
     elif args.net_name == 'raw_resnet18':
         model = raw_resnet18(num_classes=numclasses)
@@ -109,6 +123,8 @@ def main(args):
         model = raw_vgg11(num_classes=numclasses)
     elif args.net_name == 'dy_vgg11':
         model = dy_vgg11(num_classes=numclasses)
+    elif args.net_name == 'dy_vgg_small':
+        model = dy_vgg_small(num_classes=numclasses)
     model.to(args.device)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     print(str(args))
